@@ -1,22 +1,9 @@
 package com.inventario.view;
 
-import com.inventario.controller.InsumoController;
-import com.inventario.model.Insumo;
-
-import java.util.List;
+import javax.swing.SwingUtilities;
 
 public class Main {
-
     public static void main(String[] args) {
-
-        InsumoController controller = new InsumoController();
-
-        controller.registrar("Aceite", "Litros", 30, 5);
-
-        List<Insumo> lista = controller.listar();
-
-        for (Insumo i : lista) {
-            System.out.println(i.getIdInsumo() + " - " + i.getNombre());
-        }
+        SwingUtilities.invokeLater(() -> new VentanaPrincipal().setVisible(true));
     }
 }

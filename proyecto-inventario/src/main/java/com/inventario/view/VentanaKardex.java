@@ -1,35 +1,36 @@
 package com.inventario.view;
 
-import com.inventario.conexion.ConexionBD;
 import com.inventario.controller.InsumoController;
+import com.inventario.controller.KardexController;
 import com.inventario.model.Insumo;
+import com.inventario.model.MovimientoKardex;
+import com.inventario.util.InventarioException;
 
 import javax.swing.*;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.sql.*;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * VentanaKardex.java
- * Módulo de consulta de Kardex del sistema Don Abe Urban Food.
- * Permite seleccionar un insumo y un rango de fechas para ver
- * el historial completo de movimientos (entradas y salidas),
- * mostrando quién intervino en cada movimiento y los saldos.
+ * Consulta de Kardex (RF-06): historial de movimientos de un insumo en un rango de fechas.
  */
 public class VentanaKardex extends JFrame {
 
-    private InsumoController insumoController = new InsumoController();
+    private final InsumoController insumoController = new InsumoController();
+    private final KardexController kardexController = new KardexController();
 
-    private JComboBox<String> cmbInsumo    = new JComboBox<>();
-    private JTextField        txtFechaIni  = new JTextField("2024-01-01");
-    private JTextField        txtFechaFin  = new JTextField(java.time.LocalDate.now().toString());
+    private final JComboBox<String> cmbInsumo   = new JComboBox<>();
+    private final JTextField        txtFechaIni = new JTextField("2024-01-01");
+    private final JTextField        txtFechaFin = new JTextField(java.time.LocalDate.now().toString());
 
-    private int[] idsInsumos;
+    private int[] idsInsumos = new int[0];
+    private List<MovimientoKardex> movimientos = new ArrayList<>();
 
-    private JTable            tabla;
+    private JTable tabla;
     private DefaultTableModel modeloTabla;
-    private JLabel            lblResumen;
+    private JLabel lblResumen;
 
     public VentanaKardex() {
         setTitle("Consulta de Kardex - Don Abe Urban Food");
@@ -44,13 +45,12 @@ public class VentanaKardex extends JFrame {
         lblTitulo.setForeground(new Color(180, 60, 40));
         lblTitulo.setBorder(BorderFactory.createEmptyBorder(15, 15, 5, 15));
 
-        // --- FORMULARIO DE FILTROS ---
+        // --- FILTROS ---
         JPanel panelFiltros = new JPanel(new GridLayout(3, 2, 8, 8));
         panelFiltros.setBackground(new Color(245, 245, 245));
         panelFiltros.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(5, 15, 5, 15),
-            BorderFactory.createTitledBorder("Filtros de Búsqueda")
-        ));
+                BorderFactory.createEmptyBorder(5, 15, 5, 15),
+                BorderFactory.createTitledBorder("Filtros de Búsqueda")));
 
         panelFiltros.add(new JLabel("Insumo:"));
         panelFiltros.add(cmbInsumo);
@@ -59,7 +59,7 @@ public class VentanaKardex extends JFrame {
         panelFiltros.add(new JLabel("Fecha fin (YYYY-MM-DD):"));
         panelFiltros.add(txtFechaFin);
 
-        // --- BOTÓN CONSULTAR ---
+        // --- BOTONES ---
         JPanel panelBoton = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 8));
         panelBoton.setBackground(new Color(245, 245, 245));
 
@@ -70,8 +70,8 @@ public class VentanaKardex extends JFrame {
         panelBoton.add(btnLimpiar);
 
         // --- TABLA ---
-        String[] columnas = {"Fecha", "Tipo Movimiento", "Tercero", "Cantidad",
-                             "Stock Anterior", "Stock Nuevo", "Observación"};
+        String[] columnas = { "Fecha", "Tipo Movimiento", "Tercero", "Cantidad",
+                              "Stock Anterior", "Stock Nuevo", "Observación" };
         modeloTabla = new DefaultTableModel(columnas, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
@@ -84,24 +84,24 @@ public class VentanaKardex extends JFrame {
         tabla.getTableHeader().setBackground(new Color(180, 60, 40));
         tabla.getTableHeader().setForeground(Color.WHITE);
 
-        // Colorear filas: verde para entradas (COMPRA), rojo para salidas
-        tabla.setDefaultRenderer(Object.class, new javax.swing.table.DefaultTableCellRenderer() {
+        // Verde = entrada (efecto_kardex > 0), rojo = salida
+        tabla.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object value,
                     boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(
                         t, value, isSelected, hasFocus, row, column);
-                String tipo = (String) modeloTabla.getValueAt(row, 1);
-                if ("COMPRA".equals(tipo)) {
-                    c.setBackground(new Color(212, 237, 218)); // verde claro
+                boolean entrada = row < movimientos.size() && movimientos.get(row).getEfecto() > 0;
+                if (entrada) {
+                    c.setBackground(new Color(212, 237, 218));
                     c.setForeground(new Color(21, 87, 36));
                 } else {
-                    c.setBackground(new Color(255, 220, 220)); // rojo claro
+                    c.setBackground(new Color(255, 220, 220));
                     c.setForeground(new Color(130, 0, 0));
                 }
                 if (isSelected) {
-                    c.setBackground(tabla.getSelectionBackground());
-                    c.setForeground(tabla.getSelectionForeground());
+                    c.setBackground(t.getSelectionBackground());
+                    c.setForeground(t.getSelectionForeground());
                 }
                 return c;
             }
@@ -109,9 +109,8 @@ public class VentanaKardex extends JFrame {
 
         JScrollPane scroll = new JScrollPane(tabla);
         scroll.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(5, 15, 5, 15),
-            BorderFactory.createTitledBorder("Historial de Movimientos")
-        ));
+                BorderFactory.createEmptyBorder(5, 15, 5, 15),
+                BorderFactory.createTitledBorder("Historial de Movimientos")));
 
         // --- RESUMEN ---
         lblResumen = new JLabel(" ", SwingConstants.LEFT);
@@ -122,6 +121,7 @@ public class VentanaKardex extends JFrame {
         btnConsultar.addActionListener(e -> consultarKardex());
         btnLimpiar.addActionListener(e -> {
             modeloTabla.setRowCount(0);
+            movimientos = new ArrayList<>();
             lblResumen.setText(" ");
         });
 
@@ -140,99 +140,58 @@ public class VentanaKardex extends JFrame {
         cargarComboInsumos();
     }
 
-    /**
-     * Carga los insumos disponibles en el ComboBox.
-     */
     private void cargarComboInsumos() {
-        List<Insumo> insumos = insumoController.listar();
-        idsInsumos = new int[insumos.size()];
         cmbInsumo.removeAllItems();
-        for (int i = 0; i < insumos.size(); i++) {
-            idsInsumos[i] = insumos.get(i).getIdInsumo();
-            cmbInsumo.addItem(insumos.get(i).getNombre());
+        idsInsumos = new int[0];
+        try {
+            List<Insumo> insumos = insumoController.listar();
+            idsInsumos = new int[insumos.size()];
+            for (int i = 0; i < insumos.size(); i++) {
+                idsInsumos[i] = insumos.get(i).getIdInsumo();
+                cmbInsumo.addItem(insumos.get(i).getNombre());
+            }
+        } catch (InventarioException e) {
+            Mensajes.error(this, e.getMessage());
         }
     }
 
-    /**
-     * Consulta el Kardex del insumo seleccionado en el rango de fechas.
-     * Une KARDEX, DOCUMENTO, TIPO_DOCUMENTO y TERCERO para mostrar
-     * toda la trazabilidad del movimiento.
-     */
     private void consultarKardex() {
-        if (cmbInsumo.getItemCount() == 0) {
-            JOptionPane.showMessageDialog(this, "No hay insumos registrados.");
+        if (cmbInsumo.getItemCount() == 0 || cmbInsumo.getSelectedIndex() < 0) {
+            Mensajes.aviso(this, "No hay insumos registrados.");
             return;
         }
-
-        int    idInsumo   = idsInsumos[cmbInsumo.getSelectedIndex()];
-        String fechaIni   = txtFechaIni.getText().trim();
-        String fechaFin   = txtFechaFin.getText().trim();
-
-        if (fechaIni.isEmpty() || fechaFin.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                "Ingrese ambas fechas para la consulta.",
-                "Validación", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        String sql = "SELECT K.fecha_movimiento, TD.descripcion AS tipo, " +
-                     "T.nombre AS tercero, K.cantidad, " +
-                     "K.stock_anterior, K.stock_nuevo, D.observacion " +
-                     "FROM KARDEX K " +
-                     "JOIN DOCUMENTO D      ON K.id_documento      = D.id_documento " +
-                     "JOIN TIPO_DOCUMENTO TD ON D.tipo_documento_id = TD.tipo_documento_id " +
-                     "JOIN TERCERO T         ON D.id_tercero        = T.id_tercero " +
-                     "WHERE K.id_insumo = ? " +
-                     "AND K.fecha_movimiento BETWEEN ? AND ? " +
-                     "ORDER BY K.fecha_movimiento ASC";
+        int idInsumo = idsInsumos[cmbInsumo.getSelectedIndex()];
 
         modeloTabla.setRowCount(0);
-        int totalMovimientos = 0;
-        double totalEntradas = 0;
+        movimientos = new ArrayList<>();
+        try {
+            movimientos = kardexController.consultar(idInsumo,
+                    txtFechaIni.getText(), txtFechaFin.getText());
+        } catch (InventarioException e) {
+            Mensajes.error(this, e.getMessage());
+            lblResumen.setText(" ");
+            return;
+        }
 
-        try (Connection conn = ConexionBD.getConexion();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        double entradas = 0;
+        double salidas = 0;
+        for (MovimientoKardex m : movimientos) {
+            modeloTabla.addRow(new Object[] {
+                    m.getFecha(), m.getTipo(), m.getTercero(), m.getCantidad(),
+                    m.getStockAnterior(), m.getStockNuevo(), m.getObservacion()
+            });
+            if (m.getEfecto() > 0) entradas += m.getCantidad(); else salidas += m.getCantidad();
+        }
 
-            ps.setInt(1, idInsumo);
-            ps.setString(2, fechaIni);
-            ps.setString(3, fechaFin);
-
-            ResultSet rs = ps.executeQuery();
-
-            while (rs.next()) {
-                String tipo = rs.getString("tipo");
-                double cantidad = rs.getDouble("cantidad");
-
-                modeloTabla.addRow(new Object[]{
-                    rs.getDate("fecha_movimiento"),
-                    tipo,
-                    rs.getString("tercero"),
-                    cantidad,
-                    rs.getDouble("stock_anterior"),
-                    rs.getDouble("stock_nuevo"),
-                    rs.getString("observacion")
-                });
-
-                totalMovimientos++;
-                if ("COMPRA".equals(tipo)) totalEntradas += cantidad;
-            }
-
-            if (totalMovimientos == 0) {
-                lblResumen.setText("⚠ No hay movimientos para este insumo en el rango seleccionado.");
-                lblResumen.setForeground(new Color(150, 100, 0));
-            } else {
-                lblResumen.setText(
-                    "Total movimientos: " + totalMovimientos +
-                    "   |   Total entradas (compras): " + totalEntradas +
-                    "   |   Insumo: " + cmbInsumo.getSelectedItem()
-                );
-                lblResumen.setForeground(new Color(30, 30, 30));
-            }
-
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this,
-                "Error al consultar el Kardex: " + e.getMessage(),
-                "Error", JOptionPane.ERROR_MESSAGE);
+        if (movimientos.isEmpty()) {
+            lblResumen.setText("Atención: no hay movimientos para este insumo en el rango seleccionado.");
+            lblResumen.setForeground(new Color(150, 100, 0));
+        } else {
+            lblResumen.setText("Movimientos: " + movimientos.size()
+                    + "   |   Entradas: " + entradas
+                    + "   |   Salidas: " + salidas
+                    + "   |   Insumo: " + cmbInsumo.getSelectedItem());
+            lblResumen.setForeground(new Color(30, 30, 30));
         }
     }
 

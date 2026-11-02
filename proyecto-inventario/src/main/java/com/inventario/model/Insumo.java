@@ -1,5 +1,7 @@
 package com.inventario.model;
 
+import java.time.LocalDate;
+
 public class Insumo {
 
     private int idInsumo;
@@ -7,16 +9,23 @@ public class Insumo {
     private String unidadMedida;
     private double stockActual;
     private double stockMinimo;
+    private LocalDate fechaVencimiento; // opcional (RF-01): null si el insumo no vence
 
     public Insumo() {
     }
 
     public Insumo(int idInsumo, String nombre, String unidadMedida, double stockActual, double stockMinimo) {
+        this(idInsumo, nombre, unidadMedida, stockActual, stockMinimo, null);
+    }
+
+    public Insumo(int idInsumo, String nombre, String unidadMedida, double stockActual,
+                  double stockMinimo, LocalDate fechaVencimiento) {
         this.idInsumo = idInsumo;
         this.nombre = nombre;
         this.unidadMedida = unidadMedida;
         this.stockActual = stockActual;
         this.stockMinimo = stockMinimo;
+        this.fechaVencimiento = fechaVencimiento;
     }
 
     public int getIdInsumo() {
@@ -57,5 +66,13 @@ public class Insumo {
 
     public void setStockMinimo(double stockMinimo) {
         this.stockMinimo = stockMinimo;
+    }
+
+    public LocalDate getFechaVencimiento() {
+        return fechaVencimiento;
+    }
+
+    public void setFechaVencimiento(LocalDate fechaVencimiento) {
+        this.fechaVencimiento = fechaVencimiento;
     }
 }

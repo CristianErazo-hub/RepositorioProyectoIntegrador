@@ -2,6 +2,9 @@ package com.inventario.dao;
 
 import com.inventario.conexion.ConexionBD;
 import com.inventario.model.Compra;
+import com.inventario.util.ErroresBD;
+import com.inventario.util.InventarioException;
+import com.inventario.util.ReglasInventario;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -9,83 +12,84 @@ import java.util.List;
 
 public class CompraDAO {
 
+    private static final class TipoDocumento {
+        final int id;
+        final int efecto;
+        TipoDocumento(int id, int efecto) { this.id = id; this.efecto = efecto; }
+    }
+
     /**
-     * Registra una compra completa de forma transaccional.
-     * Si cualquier paso falla, se hace rollback y no queda ningún dato a medias.
+     * Registra una compra de forma transaccional (RNF-02). Si cualquier paso falla se hace
+     * rollback y se lanza InventarioException con el motivo.
      */
-    public boolean registrarCompra(Compra compra) {
-        Connection conn = null;
+    public void registrarCompra(Compra compra) {
+        Connection conn = ConexionBD.getConexion();
         try {
-            conn = ConexionBD.getConexion();
-            conn.setAutoCommit(false); // iniciar transacción
+            conn.setAutoCommit(false);
 
-            // Paso 1: obtener el tipo_documento_id para COMPRA
-            int tipoDocId = obtenerTipoDocumento(conn, "COMPRA");
+            TipoDocumento tipo = obtenerTipoDocumento(conn, "COMPRA");
+            double stockAnterior = obtenerStockBloqueado(conn, compra.getIdInsumo());
+            double stockNuevo = ReglasInventario.nuevoStock(stockAnterior, compra.getCantidad(), tipo.efecto);
 
-            // Paso 2: insertar en DOCUMENTO
-            int idDocumento = insertarDocumento(conn, tipoDocId, compra);
-
-            // Paso 3: obtener stock actual del insumo
-            double stockAnterior = obtenerStock(conn, compra.getIdInsumo());
-            double stockNuevo    = stockAnterior + compra.getCantidad();
-
-            // Paso 4: insertar en KARDEX
+            int idDocumento = insertarDocumento(conn, tipo.id, compra);
             insertarKardex(conn, idDocumento, compra, stockAnterior, stockNuevo);
-
-            // Paso 5: actualizar stock en INSUMOS
             actualizarStock(conn, compra.getIdInsumo(), stockNuevo);
 
-            conn.commit(); // confirmar transacción
-            return true;
-
+            conn.commit();
         } catch (SQLException e) {
-            System.out.println("Error en compra: " + e.getMessage());
-            try { if (conn != null) conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
-            return false;
+            rollbackSilencioso(conn);
+            throw ErroresBD.traducir("registrar la compra", e);
+        } catch (RuntimeException e) {
+            rollbackSilencioso(conn);
+            throw e;
         } finally {
-            try { if (conn != null) conn.close(); } catch (SQLException e) { e.printStackTrace(); }
+            cerrarSilencioso(conn);
         }
     }
 
-    private int obtenerTipoDocumento(Connection conn, String descripcion) throws SQLException {
-        String sql = "SELECT tipo_documento_id FROM TIPO_DOCUMENTO WHERE descripcion = ?";
+    private TipoDocumento obtenerTipoDocumento(Connection conn, String descripcion) throws SQLException {
+        String sql = "SELECT tipo_documento_id, efecto_kardex FROM TIPO_DOCUMENTO WHERE descripcion = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, descripcion);
-            ResultSet rs = ps.executeQuery();
-            if (rs.next()) return rs.getInt(1);
-            throw new SQLException("No se encontró el tipo de documento: " + descripcion);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return new TipoDocumento(rs.getInt(1), rs.getInt(2));
+            }
         }
+        throw new InventarioException("No existe el tipo de documento '" + descripcion
+                + "'. Ejecute el script de la base de datos.");
+    }
+
+    private double obtenerStockBloqueado(Connection conn, int idInsumo) throws SQLException {
+        String sql = "SELECT stock_actual FROM INSUMOS WHERE id_insumo = ? FOR UPDATE";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idInsumo);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getDouble(1);
+            }
+        }
+        throw new InventarioException("El insumo seleccionado ya no existe.");
     }
 
     private int insertarDocumento(Connection conn, int tipoDocId, Compra compra) throws SQLException {
-        String sql = "INSERT INTO DOCUMENTO (tipo_documento_id, id_tercero, fecha, observacion) " +
-                     "VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO DOCUMENTO (tipo_documento_id, id_tercero, fecha, observacion) "
+                   + "VALUES (?, ?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, tipoDocId);
             ps.setInt(2, compra.getIdTercero());
             ps.setDate(3, Date.valueOf(compra.getFecha()));
             ps.setString(4, compra.getObservacion());
             ps.executeUpdate();
-            ResultSet keys = ps.getGeneratedKeys();
-            if (keys.next()) return keys.getInt(1);
-            throw new SQLException("No se obtuvo ID del documento.");
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (keys.next()) return keys.getInt(1);
+            }
         }
-    }
-
-    private double obtenerStock(Connection conn, int idInsumo) throws SQLException {
-        String sql = "SELECT stock_actual FROM INSUMOS WHERE id_insumo = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, idInsumo);
-            ResultSet rs = ps.executeQuery();
-            if (rs.next()) return rs.getDouble(1);
-            throw new SQLException("Insumo no encontrado: " + idInsumo);
-        }
+        throw new InventarioException("No se pudo obtener el número del documento.");
     }
 
     private void insertarKardex(Connection conn, int idDocumento, Compra compra,
-                                 double stockAnterior, double stockNuevo) throws SQLException {
-        String sql = "INSERT INTO KARDEX (id_documento, id_insumo, cantidad, " +
-                     "stock_anterior, stock_nuevo, fecha_movimiento) VALUES (?, ?, ?, ?, ?, ?)";
+                                double stockAnterior, double stockNuevo) throws SQLException {
+        String sql = "INSERT INTO KARDEX (id_documento, id_insumo, cantidad, "
+                   + "stock_anterior, stock_nuevo, fecha_movimiento) VALUES (?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, idDocumento);
             ps.setInt(2, compra.getIdInsumo());
@@ -106,20 +110,26 @@ public class CompraDAO {
         }
     }
 
-    /**
-     * Lista el historial de compras uniendo DOCUMENTO, TERCERO, KARDEX e INSUMOS.
-     */
+    private void rollbackSilencioso(Connection conn) {
+        try { conn.rollback(); } catch (SQLException ignorado) { /* nada más que hacer */ }
+    }
+
+    private void cerrarSilencioso(Connection conn) {
+        try { conn.close(); } catch (SQLException ignorado) { /* nada más que hacer */ }
+    }
+
+    /** Historial de compras: une DOCUMENTO, TERCERO, KARDEX e INSUMOS. */
     public List<Compra> listarCompras() {
         List<Compra> lista = new ArrayList<>();
-        String sql = "SELECT D.id_documento, T.nombre AS proveedor, I.nombre AS insumo, " +
-                     "K.cantidad, D.fecha, D.observacion " +
-                     "FROM DOCUMENTO D " +
-                     "JOIN TERCERO T ON D.id_tercero = T.id_tercero " +
-                     "JOIN KARDEX K ON K.id_documento = D.id_documento " +
-                     "JOIN INSUMOS I ON K.id_insumo = I.id_insumo " +
-                     "JOIN TIPO_DOCUMENTO TD ON D.tipo_documento_id = TD.tipo_documento_id " +
-                     "WHERE TD.descripcion = 'COMPRA' " +
-                     "ORDER BY D.fecha DESC";
+        String sql = "SELECT D.id_documento, T.nombre AS proveedor, I.nombre AS insumo, "
+                   + "K.cantidad, D.fecha, D.observacion "
+                   + "FROM DOCUMENTO D "
+                   + "JOIN TERCERO T ON D.id_tercero = T.id_tercero "
+                   + "JOIN KARDEX K ON K.id_documento = D.id_documento "
+                   + "JOIN INSUMOS I ON K.id_insumo = I.id_insumo "
+                   + "JOIN TIPO_DOCUMENTO TD ON D.tipo_documento_id = TD.tipo_documento_id "
+                   + "WHERE TD.descripcion = 'COMPRA' "
+                   + "ORDER BY D.fecha DESC, D.id_documento DESC";
         try (Connection conn = ConexionBD.getConexion();
              Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
@@ -134,7 +144,7 @@ public class CompraDAO {
                 lista.add(c);
             }
         } catch (SQLException e) {
-            System.out.println("Error al listar compras: " + e.getMessage());
+            throw ErroresBD.traducir("listar las compras", e);
         }
         return lista;
     }

@@ -2,21 +2,23 @@ package com.inventario.dao;
 
 import com.inventario.conexion.ConexionBD;
 import com.inventario.model.Proveedor;
+import com.inventario.util.ErroresBD;
+import com.inventario.util.InventarioException;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * ProveedorDAO.java
- * Gestiona la persistencia de proveedores en la tabla TERCERO
- * (tipo = 'PROVEEDOR') de la base de datos MySQL.
- */
+/** Persistencia de proveedores en TERCERO (tipo = 'PROVEEDOR'). */
 public class ProveedorDAO {
 
     public void insertar(Proveedor p) {
-        String sql = "INSERT INTO TERCERO (nombre, telefono, correo, direccion, tipo) " +
-                     "VALUES (?, ?, ?, ?, 'PROVEEDOR')";
+        String sql = "INSERT INTO TERCERO (nombre, telefono, correo, direccion, tipo) "
+                   + "VALUES (?, ?, ?, ?, 'PROVEEDOR')";
         try (Connection conn = ConexionBD.getConexion();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, p.getNombre());
@@ -25,7 +27,7 @@ public class ProveedorDAO {
             ps.setString(4, p.getDireccion());
             ps.executeUpdate();
         } catch (SQLException e) {
-            System.out.println("Error al insertar proveedor: " + e.getMessage());
+            throw ErroresBD.traducir("registrar el proveedor", e);
         }
     }
 
@@ -45,14 +47,14 @@ public class ProveedorDAO {
                 lista.add(p);
             }
         } catch (SQLException e) {
-            System.out.println("Error al listar proveedores: " + e.getMessage());
+            throw ErroresBD.traducir("listar los proveedores", e);
         }
         return lista;
     }
 
     public void actualizar(Proveedor p) {
-        String sql = "UPDATE TERCERO SET nombre=?, telefono=?, correo=?, direccion=? " +
-                     "WHERE id_tercero=? AND tipo='PROVEEDOR'";
+        String sql = "UPDATE TERCERO SET nombre = ?, telefono = ?, correo = ?, direccion = ? "
+                   + "WHERE id_tercero = ? AND tipo = 'PROVEEDOR'";
         try (Connection conn = ConexionBD.getConexion();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, p.getNombre());
@@ -60,20 +62,24 @@ public class ProveedorDAO {
             ps.setString(3, p.getCorreo());
             ps.setString(4, p.getDireccion());
             ps.setInt(5, p.getIdTercero());
-            ps.executeUpdate();
+            if (ps.executeUpdate() == 0) {
+                throw new InventarioException("El proveedor ya no existe.");
+            }
         } catch (SQLException e) {
-            System.out.println("Error al actualizar proveedor: " + e.getMessage());
+            throw ErroresBD.traducir("actualizar el proveedor", e);
         }
     }
 
     public void eliminar(int id) {
-        String sql = "DELETE FROM TERCERO WHERE id_tercero=? AND tipo='PROVEEDOR'";
+        String sql = "DELETE FROM TERCERO WHERE id_tercero = ? AND tipo = 'PROVEEDOR'";
         try (Connection conn = ConexionBD.getConexion();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
-            ps.executeUpdate();
+            if (ps.executeUpdate() == 0) {
+                throw new InventarioException("El proveedor ya no existe.");
+            }
         } catch (SQLException e) {
-            System.out.println("Error al eliminar proveedor: " + e.getMessage());
+            throw ErroresBD.traducir("eliminar el proveedor", e);
         }
     }
 }

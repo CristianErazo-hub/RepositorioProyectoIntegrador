@@ -6,6 +6,7 @@ import com.inventario.controller.ProveedorController;
 import com.inventario.model.Compra;
 import com.inventario.model.Insumo;
 import com.inventario.model.Proveedor;
+import com.inventario.util.InventarioException;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -14,23 +15,20 @@ import java.util.List;
 
 public class VentanaCompras extends JFrame {
 
-    private CompraController    compraController    = new CompraController();
-    private ProveedorController proveedorController = new ProveedorController();
-    private InsumoController    insumoController    = new InsumoController();
+    private final CompraController    compraController    = new CompraController();
+    private final ProveedorController proveedorController = new ProveedorController();
+    private final InsumoController    insumoController    = new InsumoController();
 
-    // ComboBoxes
-    private JComboBox<String> cmbProveedor = new JComboBox<>();
-    private JComboBox<String> cmbInsumo    = new JComboBox<>();
+    private final JComboBox<String> cmbProveedor = new JComboBox<>();
+    private final JComboBox<String> cmbInsumo    = new JComboBox<>();
 
-    // Campos
-    private JTextField txtCantidad    = new JTextField();
-    private JTextField txtObservacion = new JTextField();
+    private final JTextField txtCantidad    = new JTextField();
+    private final JTextField txtObservacion = new JTextField();
 
-    // Arreglos para guardar los IDs de los combos
-    private int[] idsProveedores;
-    private int[] idsInsumos;
+    // IDs paralelos a los items de cada combo
+    private int[] idsProveedores = new int[0];
+    private int[] idsInsumos     = new int[0];
 
-    // Tabla de historial
     private JTable tabla;
     private DefaultTableModel modeloTabla;
 
@@ -51,9 +49,8 @@ public class VentanaCompras extends JFrame {
         JPanel panelFormulario = new JPanel(new GridLayout(4, 2, 8, 8));
         panelFormulario.setBackground(new Color(245, 245, 245));
         panelFormulario.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(5, 15, 5, 15),
-            BorderFactory.createTitledBorder("Nueva Compra")
-        ));
+                BorderFactory.createEmptyBorder(5, 15, 5, 15),
+                BorderFactory.createTitledBorder("Nueva Compra")));
 
         panelFormulario.add(new JLabel("Proveedor:"));
         panelFormulario.add(cmbProveedor);
@@ -75,7 +72,7 @@ public class VentanaCompras extends JFrame {
         panelBotones.add(btnLimpiar);
 
         // --- TABLA HISTORIAL ---
-        String[] columnas = {"ID Doc.", "Proveedor", "Insumo", "Cantidad", "Fecha", "Observación"};
+        String[] columnas = { "ID Doc.", "Proveedor", "Insumo", "Cantidad", "Fecha", "Observación" };
         modeloTabla = new DefaultTableModel(columnas, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
@@ -90,9 +87,8 @@ public class VentanaCompras extends JFrame {
 
         JScrollPane scroll = new JScrollPane(tabla);
         scroll.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(5, 15, 15, 15),
-            BorderFactory.createTitledBorder("Historial de Compras")
-        ));
+                BorderFactory.createEmptyBorder(5, 15, 15, 15),
+                BorderFactory.createTitledBorder("Historial de Compras")));
 
         // --- ACCIONES ---
         btnRegistrar.addActionListener(e -> registrar());
@@ -113,103 +109,72 @@ public class VentanaCompras extends JFrame {
         cargarHistorial();
     }
 
-    /**
-     * Carga proveedores e insumos en los ComboBox al abrir la ventana.
-     */
+    /** Carga proveedores e insumos en los combos al abrir la ventana y tras cada compra. */
     private void cargarCombos() {
-        // Proveedores
-        List<Proveedor> proveedores = proveedorController.listar();
-        idsProveedores = new int[proveedores.size()];
         cmbProveedor.removeAllItems();
-        for (int i = 0; i < proveedores.size(); i++) {
-            idsProveedores[i] = proveedores.get(i).getIdTercero();
-            cmbProveedor.addItem(proveedores.get(i).getNombre());
-        }
-
-        // Insumos
-        List<Insumo> insumos = insumoController.listar();
-        idsInsumos = new int[insumos.size()];
         cmbInsumo.removeAllItems();
-        for (int i = 0; i < insumos.size(); i++) {
-            idsInsumos[i] = insumos.get(i).getIdInsumo();
-            cmbInsumo.addItem(insumos.get(i).getNombre() +
-                " (Stock: " + insumos.get(i).getStockActual() + ")");
+        idsProveedores = new int[0];
+        idsInsumos = new int[0];
+        try {
+            List<Proveedor> proveedores = proveedorController.listar();
+            idsProveedores = new int[proveedores.size()];
+            for (int i = 0; i < proveedores.size(); i++) {
+                idsProveedores[i] = proveedores.get(i).getIdTercero();
+                cmbProveedor.addItem(proveedores.get(i).getNombre());
+            }
+
+            List<Insumo> insumos = insumoController.listar();
+            idsInsumos = new int[insumos.size()];
+            for (int i = 0; i < insumos.size(); i++) {
+                idsInsumos[i] = insumos.get(i).getIdInsumo();
+                cmbInsumo.addItem(insumos.get(i).getNombre()
+                        + " (Stock: " + insumos.get(i).getStockActual() + ")");
+            }
+        } catch (InventarioException e) {
+            Mensajes.error(this, e.getMessage());
         }
     }
 
-    /**
-     * Registra la compra validando los datos del formulario.
-     */
     private void registrar() {
         if (cmbProveedor.getItemCount() == 0) {
-            JOptionPane.showMessageDialog(this,
-                "Debe registrar al menos un proveedor primero.",
-                "Sin proveedores", JOptionPane.WARNING_MESSAGE);
+            Mensajes.aviso(this, "Debe registrar al menos un proveedor primero.");
             return;
         }
         if (cmbInsumo.getItemCount() == 0) {
-            JOptionPane.showMessageDialog(this,
-                "Debe registrar al menos un insumo primero.",
-                "Sin insumos", JOptionPane.WARNING_MESSAGE);
+            Mensajes.aviso(this, "Debe registrar al menos un insumo primero.");
             return;
         }
-        if (txtCantidad.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                "Ingrese la cantidad comprada.",
-                "Validación", JOptionPane.WARNING_MESSAGE);
+        int posProveedor = cmbProveedor.getSelectedIndex();
+        int posInsumo = cmbInsumo.getSelectedIndex();
+        if (posProveedor < 0 || posInsumo < 0) {
+            Mensajes.aviso(this, "Seleccione un proveedor y un insumo.");
             return;
         }
 
         try {
-            int    idProveedor  = idsProveedores[cmbProveedor.getSelectedIndex()];
-            int    idInsumo     = idsInsumos[cmbInsumo.getSelectedIndex()];
-            double cantidad     = Double.parseDouble(txtCantidad.getText().trim());
-            String observacion  = txtObservacion.getText().trim();
+            compraController.registrar(idsProveedores[posProveedor], idsInsumos[posInsumo],
+                    txtCantidad.getText(), txtObservacion.getText());
 
-            if (cantidad <= 0) {
-                JOptionPane.showMessageDialog(this,
-                    "La cantidad debe ser mayor a cero.",
-                    "Validación", JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-
-            boolean exito = compraController.registrar(idProveedor, idInsumo,
-                                                        cantidad, observacion);
-            if (exito) {
-                JOptionPane.showMessageDialog(this,
-                    "Compra registrada. Stock actualizado correctamente.",
-                    "Éxito", JOptionPane.INFORMATION_MESSAGE);
-                limpiar();
-                cargarCombos();   // refrescar stock visible en combo
-                cargarHistorial();
-            } else {
-                JOptionPane.showMessageDialog(this,
-                    "Error al registrar la compra. Verifique la conexión.",
-                    "Error", JOptionPane.ERROR_MESSAGE);
-            }
-
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this,
-                "La cantidad debe ser un número válido.",
-                "Error de validación", JOptionPane.ERROR_MESSAGE);
+            Mensajes.info(this, "Compra registrada. Stock actualizado correctamente.");
+            limpiar();
+            cargarCombos();      // refresca el stock visible en el combo
+            cargarHistorial();
+        } catch (InventarioException e) {
+            Mensajes.error(this, e.getMessage());
         }
     }
 
-    /**
-     * Carga el historial de compras en la tabla.
-     */
     private void cargarHistorial() {
         modeloTabla.setRowCount(0);
-        List<Compra> lista = compraController.listar();
-        for (Compra c : lista) {
-            modeloTabla.addRow(new Object[]{
-                c.getIdDocumento(),
-                c.getNombreProveedor(),
-                c.getNombreInsumo(),
-                c.getCantidad(),
-                c.getFecha(),
-                c.getObservacion()
-            });
+        try {
+            for (Compra c : compraController.listar()) {
+                modeloTabla.addRow(new Object[] {
+                        c.getIdDocumento(), c.getNombreProveedor(), c.getNombreInsumo(),
+                        c.getCantidad(), c.getFecha(), c.getObservacion()
+                });
+            }
+        } catch (InventarioException e) {
+            Mensajes.error(this, e.getMessage());
         }
     }
 

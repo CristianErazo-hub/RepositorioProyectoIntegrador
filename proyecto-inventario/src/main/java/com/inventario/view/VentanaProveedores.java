@@ -2,6 +2,7 @@ package com.inventario.view;
 
 import com.inventario.controller.ProveedorController;
 import com.inventario.model.Proveedor;
+import com.inventario.util.InventarioException;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -9,19 +10,17 @@ import java.awt.*;
 import java.util.List;
 
 /**
- * VentanaProveedores.java
- * Módulo de gestión de proveedores del sistema Don Abe Urban Food.
- * Permite registrar, actualizar y eliminar proveedores.
+ * Módulo de gestión de proveedores (RF-04): registrar, actualizar y eliminar.
  */
 public class VentanaProveedores extends JFrame {
 
-    private ProveedorController controller = new ProveedorController();
+    private final ProveedorController controller = new ProveedorController();
 
-    private JTextField txtId        = new JTextField();
-    private JTextField txtNombre    = new JTextField();
-    private JTextField txtTelefono  = new JTextField();
-    private JTextField txtCorreo    = new JTextField();
-    private JTextField txtDireccion = new JTextField();
+    private final JTextField txtId        = new JTextField();
+    private final JTextField txtNombre    = new JTextField();
+    private final JTextField txtTelefono  = new JTextField();
+    private final JTextField txtCorreo    = new JTextField();
+    private final JTextField txtDireccion = new JTextField();
 
     private JTable tabla;
     private DefaultTableModel modeloTabla;
@@ -43,9 +42,8 @@ public class VentanaProveedores extends JFrame {
         JPanel panelFormulario = new JPanel(new GridLayout(5, 2, 8, 8));
         panelFormulario.setBackground(new Color(245, 245, 245));
         panelFormulario.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(5, 15, 5, 15),
-            BorderFactory.createTitledBorder("Datos del Proveedor")
-        ));
+                BorderFactory.createEmptyBorder(5, 15, 5, 15),
+                BorderFactory.createTitledBorder("Datos del Proveedor")));
 
         panelFormulario.add(new JLabel("Nombre:"));
         panelFormulario.add(txtNombre);
@@ -73,7 +71,7 @@ public class VentanaProveedores extends JFrame {
         panelBotones.add(btnLimpiar);
 
         // --- TABLA ---
-        String[] columnas = {"ID", "Nombre", "Teléfono", "Correo", "Dirección"};
+        String[] columnas = { "ID", "Nombre", "Teléfono", "Correo", "Dirección" };
         modeloTabla = new DefaultTableModel(columnas, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
@@ -86,23 +84,22 @@ public class VentanaProveedores extends JFrame {
         tabla.getTableHeader().setBackground(new Color(180, 60, 40));
         tabla.getTableHeader().setForeground(Color.WHITE);
 
-        // Al hacer clic en fila, cargar datos en formulario
+        // Al hacer clic en una fila, cargar los datos en el formulario
         tabla.getSelectionModel().addListSelectionListener(e -> {
             int fila = tabla.getSelectedRow();
             if (fila >= 0) {
-                txtId.setText(modeloTabla.getValueAt(fila, 0).toString());
-                txtNombre.setText(modeloTabla.getValueAt(fila, 1).toString());
-                txtTelefono.setText(modeloTabla.getValueAt(fila, 2).toString());
-                txtCorreo.setText(modeloTabla.getValueAt(fila, 3).toString());
-                txtDireccion.setText(modeloTabla.getValueAt(fila, 4).toString());
+                txtId.setText(valor(fila, 0));
+                txtNombre.setText(valor(fila, 1));
+                txtTelefono.setText(valor(fila, 2));
+                txtCorreo.setText(valor(fila, 3));
+                txtDireccion.setText(valor(fila, 4));
             }
         });
 
         JScrollPane scroll = new JScrollPane(tabla);
         scroll.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(5, 15, 15, 15),
-            BorderFactory.createTitledBorder("Proveedores Registrados")
-        ));
+                BorderFactory.createEmptyBorder(5, 15, 15, 15),
+                BorderFactory.createTitledBorder("Proveedores Registrados")));
 
         // --- ACCIONES ---
         btnRegistrar.addActionListener(e -> registrar());
@@ -124,74 +121,72 @@ public class VentanaProveedores extends JFrame {
         cargarTabla();
     }
 
+    private String valor(int fila, int columna) {
+        Object v = modeloTabla.getValueAt(fila, columna);
+        return v == null ? "" : v.toString();
+    }
+
     private void registrar() {
-        if (!validarCampos()) return;
-        controller.registrar(
-            txtNombre.getText().trim(),
-            txtTelefono.getText().trim(),
-            txtCorreo.getText().trim(),
-            txtDireccion.getText().trim()
-        );
-        JOptionPane.showMessageDialog(this, "Proveedor registrado correctamente.");
-        limpiar();
-        cargarTabla();
+        try {
+            controller.registrar(txtNombre.getText(), txtTelefono.getText(),
+                    txtCorreo.getText(), txtDireccion.getText());
+            Mensajes.info(this, "Proveedor registrado correctamente.");
+            limpiar();
+            cargarTabla();
+        } catch (InventarioException e) {
+            Mensajes.error(this, e.getMessage());
+        }
     }
 
     private void actualizar() {
         if (txtId.getText().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Seleccione un proveedor de la tabla.");
+            Mensajes.aviso(this, "Seleccione un proveedor de la tabla.");
             return;
         }
-        if (!validarCampos()) return;
-        controller.actualizar(
-            Integer.parseInt(txtId.getText()),
-            txtNombre.getText().trim(),
-            txtTelefono.getText().trim(),
-            txtCorreo.getText().trim(),
-            txtDireccion.getText().trim()
-        );
-        JOptionPane.showMessageDialog(this, "Proveedor actualizado correctamente.");
-        limpiar();
-        cargarTabla();
+        try {
+            controller.actualizar(Integer.parseInt(txtId.getText()), txtNombre.getText(),
+                    txtTelefono.getText(), txtCorreo.getText(), txtDireccion.getText());
+            Mensajes.info(this, "Proveedor actualizado correctamente.");
+            limpiar();
+            cargarTabla();
+        } catch (InventarioException e) {
+            Mensajes.error(this, e.getMessage());
+        }
     }
 
     private void eliminar() {
         if (txtId.getText().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Seleccione un proveedor de la tabla.");
+            Mensajes.aviso(this, "Seleccione un proveedor de la tabla.");
             return;
         }
         int confirmar = JOptionPane.showConfirmDialog(this,
-            "¿Eliminar al proveedor: " + txtNombre.getText() + "?",
-            "Confirmar", JOptionPane.YES_NO_OPTION);
-        if (confirmar == JOptionPane.YES_OPTION) {
+                "¿Eliminar al proveedor: " + txtNombre.getText() + "?",
+                "Confirmar", JOptionPane.YES_NO_OPTION);
+        if (confirmar != JOptionPane.YES_OPTION) return;
+
+        try {
             controller.eliminar(Integer.parseInt(txtId.getText()));
-            JOptionPane.showMessageDialog(this, "Proveedor eliminado.");
+            Mensajes.info(this, "Proveedor eliminado.");
             limpiar();
             cargarTabla();
+        } catch (InventarioException e) {
+            Mensajes.error(this, e.getMessage());
         }
     }
 
     private void cargarTabla() {
         modeloTabla.setRowCount(0);
-        List<Proveedor> lista = controller.listar();
-        for (Proveedor p : lista) {
-            modeloTabla.addRow(new Object[]{
-                p.getIdTercero(),
-                p.getNombre(),
-                p.getTelefono(),
-                p.getCorreo(),
-                p.getDireccion()
-            });
+        try {
+            List<Proveedor> lista = controller.listar();
+            for (Proveedor p : lista) {
+                modeloTabla.addRow(new Object[] {
+                        p.getIdTercero(), p.getNombre(), p.getTelefono(),
+                        p.getCorreo(), p.getDireccion()
+                });
+            }
+        } catch (InventarioException e) {
+            Mensajes.error(this, e.getMessage());
         }
-    }
-
-    private boolean validarCampos() {
-        if (txtNombre.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "El nombre del proveedor es obligatorio.",
-                "Validación", JOptionPane.WARNING_MESSAGE);
-            return false;
-        }
-        return true;
     }
 
     private void limpiar() {

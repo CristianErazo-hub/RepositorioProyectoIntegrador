@@ -2,15 +2,16 @@ package com.inventario.view;
 
 import com.inventario.controller.InsumoController;
 import com.inventario.model.Insumo;
+import com.inventario.util.InventarioException;
+import com.inventario.util.ReglasInventario;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.util.List;
 
 public class VentanaAlertas extends JFrame {
 
-    private InsumoController controller = new InsumoController();
+    private final InsumoController controller = new InsumoController();
     private JTable tabla;
     private DefaultTableModel modeloTabla;
     private JLabel lblConteo;
@@ -90,35 +91,34 @@ public class VentanaAlertas extends JFrame {
         cargarAlertas();
     }
 
-    /**
-     * Carga en la tabla solo los insumos con stock bajo el mínimo.
-     * Calcula el déficit (cuánto falta para llegar al mínimo).
-     */
+    /** Carga solo los insumos con stock menor o igual al mínimo y calcula su déficit (RF-03). */
     private void cargarAlertas() {
         modeloTabla.setRowCount(0);
-        List<Insumo> lista = controller.listar();
         int conteo = 0;
-
-        for (Insumo i : lista) {
-            if (i.getStockActual() <= i.getStockMinimo()) {
-                double deficit = i.getStockMinimo() - i.getStockActual();
-                modeloTabla.addRow(new Object[] {
-                        i.getIdInsumo(),
-                        i.getNombre(),
-                        i.getUnidadMedida(),
-                        i.getStockActual(),
-                        i.getStockMinimo(),
-                        String.format("%.2f %s", deficit, i.getUnidadMedida())
-                });
-                conteo++;
+        try {
+            for (Insumo i : controller.listar()) {
+                if (ReglasInventario.esCritico(i.getStockActual(), i.getStockMinimo())) {
+                    double deficit = ReglasInventario.deficit(i.getStockActual(), i.getStockMinimo());
+                    modeloTabla.addRow(new Object[] {
+                            i.getIdInsumo(), i.getNombre(), i.getUnidadMedida(),
+                            i.getStockActual(), i.getStockMinimo(),
+                            String.format("%.2f %s", deficit, i.getUnidadMedida())
+                    });
+                    conteo++;
+                }
             }
+        } catch (InventarioException e) {
+            Mensajes.error(this, e.getMessage());
+            lblConteo.setText("No se pudieron cargar las alertas.");
+            lblConteo.setForeground(new Color(192, 57, 43));
+            return;
         }
 
         if (conteo == 0) {
             lblConteo.setText("No hay insumos con stock crítico.");
             lblConteo.setForeground(new Color(39, 174, 96));
         } else {
-            lblConteo.setText("⚠ " + conteo + " insumo(s) requieren reabastecimiento.");
+            lblConteo.setText("Atención: " + conteo + " insumo(s) requieren reabastecimiento.");
             lblConteo.setForeground(new Color(192, 57, 43));
         }
     }

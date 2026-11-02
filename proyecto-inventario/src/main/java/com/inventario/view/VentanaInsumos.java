@@ -21,7 +21,7 @@ public class VentanaInsumos extends JFrame {
     private final JTextField txtUnidad = new JTextField();
     private final JTextField txtStockActual = new JTextField();
     private final JTextField txtStockMinimo = new JTextField();
-    private final JTextField txtVencimiento = new JTextField();
+    private final JTextField txtVencimiento = new CampoConAyuda("Ej: 2026-12-31 (vacío si no vence)");
 
     // Tabla de insumos
     private JTable tabla;

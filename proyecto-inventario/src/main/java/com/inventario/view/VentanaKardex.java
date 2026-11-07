@@ -54,9 +54,9 @@ public class VentanaKardex extends JFrame {
 
         panelFiltros.add(new JLabel("Insumo:"));
         panelFiltros.add(cmbInsumo);
-        panelFiltros.add(new JLabel("Fecha inicio (YYYY-MM-DD):"));
+        panelFiltros.add(new JLabel("Fecha inicio (AAAA-MM-DD):"));
         panelFiltros.add(txtFechaIni);
-        panelFiltros.add(new JLabel("Fecha fin (YYYY-MM-DD):"));
+        panelFiltros.add(new JLabel("Fecha fin (AAAA-MM-DD):"));
         panelFiltros.add(txtFechaFin);
 
         // --- BOTONES ---

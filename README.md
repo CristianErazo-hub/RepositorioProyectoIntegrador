@@ -12,13 +12,13 @@ Institución Universitaria Antonio José Camacho (2026).
 - Consulta de kardex por insumo y rango de fechas
 
 ## Tecnologías
-Java 11+, Maven, MySQL 8, JDBC, Java Swing, JUnit 5
+Java 25 (LTS)+, Maven, MySQL 8, JDBC, Java Swing, JUnit 5
 
 ## Arquitectura
 MVC en capas con DAO: `view` → `controller` → `dao` → MySQL, con `model`, `util` y `conexion`.
 
 ## Instalación
-1. Instalar JRE/JDK 11 o superior y MySQL 8.
+1. Instalar JRE/JDK 25 o superior y MySQL 8.
 2. Ejecutar `script_bd.sql` en MySQL (crea la base, tablas y datos de ejemplo).
 3. Crear un usuario de MySQL con permisos SELECT, INSERT, UPDATE, DELETE sobre `proyecto_inventario`.
 4. Copiar `config.properties.example` como `config.properties` y completar usuario y contraseña.

@@ -101,15 +101,4 @@ public class VentanaPrincipal extends JFrame {
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         return btn;
     }
-
-    public static void main(String[] args) {
-        // Aplicar look and feel del sistema operativo
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        SwingUtilities.invokeLater(() -> new VentanaPrincipal().setVisible(true));
-    }
 }
